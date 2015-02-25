@@ -48,7 +48,7 @@ library
                     src
 
   exposed-modules:
-                    Data.Validation
+                    Data.Json.Json
 
 test-suite doctests
   type:

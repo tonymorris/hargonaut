@@ -60,6 +60,14 @@ import qualified Data.Text as Text(null, empty, singleton)
 import Data.Typeable(Typeable)
 import Prelude(Show)
 
+-- $setup
+-- >>> import Test.QuickCheck
+-- >>> :{
+--instance Arbitrary Json where
+--  arbitrary =
+--    _todo
+-- :}
+
 -- todo parameterise?
 -- issue 1
 type JsonObject =

@@ -61,11 +61,33 @@ import Data.Typeable(Typeable)
 import Prelude(Show)
 
 -- $setup
--- >>> import Test.QuickCheck
+-- >>> import Data.Functor((<$>))
+-- >>> import Data.Scientific(scientific)
+-- >>> import Test.QuickCheck(Arbitrary(arbitrary), Gen, oneof)
+-- >>> import Test.QuickCheck.Instances()
+-- >>> import Control.Applicative(Applicative(pure))
 -- >>> :{
 --instance Arbitrary Json where
 --  arbitrary =
---    _todo
+--    genJson
+--genJsonNumber ::
+--  Gen JsonNumber
+--genJsonNumber =
+--  do c <- arbitrary
+--     b <- arbitrary
+--     pure (scientific c b)
+--genJson ::
+--  Gen Json
+--genJson =
+--  oneof
+--    [
+--      Object <$> arbitrary
+--    , Array <$> arbitrary
+--    , String <$> arbitrary
+--    , Number <$> genJsonNumber
+--    , Boolean <$> arbitrary
+--    , pure Null
+--    ]
 -- :}
 
 -- todo parameterise?

@@ -53,6 +53,7 @@ library
 
   exposed-modules:
                     Data.Json.Json
+                    Data.Json.Parse
 
 test-suite doctests
   type:

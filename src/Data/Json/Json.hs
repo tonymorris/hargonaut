@@ -17,41 +17,30 @@ module Data.Json.Json
 , AsJson(_Json)
 , AsBoolean(_Boolean)
 , AsNull(_Null)
-, isTrue
-, true
-, isFalse
-, false
-, isNull
-, null
-, isZero
-, zero
-, isOne
-, one
-, isEmptyString
-, emptyString
-, isSingleString
-, singleString
-, isEmptyArray
-, emptyArray
-, isSingleArray
-, singleArray
-, isEmptyObject
-, emptyObject
-, isSingleObject
-, singleObject
+, AsTrue(_True)
+, AsFalse(_False)
+, AsZero(_Zero)
+, AsOne(_One)
+, AsEmptyString(_EmptyString)
+, AsSingleString(_SingleString)
+, AsEmptyArray(_EmptyArray)
+, AsSingleArray(_SingleArray)
+, AsEmptyObject(_EmptyObject)
+, AsSingleObject(_SingleObject)
 ) where
 
 import Control.Applicative(Applicative)
 import Control.Category(Category(id, (.)))
-import Control.Lens(Choice, Optic', (#), (^?), prism', has, _tail)
-import Data.Bool(Bool(False, True), not)
+import Control.Lens(Choice, Optic', _Cons, (#), (^?), prism', _head)
+import Control.Monad((=<<))
+import Data.Bool(Bool(False, True), not, bool)
 import Data.Char(Char)
 import Data.Data(Data)
 import Data.Eq(Eq((==)))
 import Data.Foldable(any)
 import qualified Data.List as List(null)
 import Data.Map(Map)
-import qualified Data.Map as Map(empty, null, size, singleton)
+import qualified Data.Map as Map(empty, null, size, singleton, toList)
 import Data.Maybe(Maybe(Just, Nothing))
 import Data.Ord(Ord)
 import Data.Scientific(Scientific)
@@ -233,127 +222,108 @@ instance (Choice p, Applicative f) => AsNull p f Json where
             Nothing
       )
 
-isTrue ::
-  Json
-  -> Bool
-isTrue j =
-  any id (j ^? _Boolean)
+boolMaybe ::
+  Bool
+  -> Maybe ()
+boolMaybe =
+  bool Nothing (Just ())
 
-true ::
-  Json
-true =
-  _Boolean # True
+class AsTrue p f s where
+  _True ::
+    Optic' p f s ()
+    
+instance (Choice p, Applicative f) => AsTrue p f Json where
+  _True =
+    prism'
+      (\() -> _Boolean # True)
+      (\j -> boolMaybe (any id (j ^? _Boolean)))
 
-isFalse ::
-  Json
-  -> Bool
-isFalse j =
-  any not (j ^? _Boolean)
+class AsFalse p f s where
+  _False ::
+    Optic' p f s ()
+    
+instance (Choice p, Applicative f) => AsFalse p f Json where
+  _False =
+    prism'
+      (\() -> _Boolean # False)
+      (\j -> boolMaybe (any not (j ^? _Boolean)))
 
-false ::
-  Json
-false =
-  _Boolean # False
+class AsZero p f s where
+  _Zero ::
+    Optic' p f s ()
+    
+instance (Choice p, Applicative f) => AsZero p f Json where
+  _Zero =
+    prism'
+      (\() -> _Number # 0)
+      (\j -> boolMaybe (any (== 0) (j ^? _Number)))
 
-isNull ::
-  Json
-  -> Bool
-isNull =
-  has _Null
+class AsOne p f s where
+  _One ::
+    Optic' p f s ()
+    
+instance (Choice p, Applicative f) => AsOne p f Json where
+  _One =
+    prism'
+      (\() -> _Number # 1)
+      (\j -> boolMaybe (any (== 1) (j ^? _Number)))
 
-null ::
-  Json
-null =
-  _Null # ()
+class AsEmptyString p f s where
+  _EmptyString ::
+    Optic' p f s ()
+    
+instance (Choice p, Applicative f) => AsEmptyString p f Json where
+  _EmptyString =
+    prism'
+      (\() -> _String # Text.empty)
+      (\j -> boolMaybe (any Text.null (j ^? _String)))
 
-isZero ::
-  Json
-  -> Bool
-isZero j =
-  any (== 0) (j ^? _Number)
+class AsSingleString p f s where
+  _SingleString ::
+    Optic' p f s Char
+    
+instance (Choice p, Applicative f) => AsSingleString p f Json where
+  _SingleString =
+    prism'
+      (\c -> _String # Text.singleton c)
+      (\j -> (\(h, t) -> bool Nothing (Just h) (Text.null t)) =<< j ^? _String . _Cons)
 
-zero ::
-  Json
-zero =
-  _Number # 0
+class AsEmptyArray p f s where
+  _EmptyArray ::
+    Optic' p f s ()
+    
+instance (Choice p, Applicative f) => AsEmptyArray p f Json where
+  _EmptyArray =
+    prism'
+      (\() -> _Array # [])
+      (\j -> boolMaybe (any List.null (j ^? _Array)))
 
-isOne ::
-  Json
-  -> Bool
-isOne j =
-  any (== 1) (j ^? _Number)
+class AsSingleArray p f s where
+  _SingleArray ::
+    Optic' p f s Json
+    
+instance (Choice p, Applicative f) => AsSingleArray p f Json where
+  _SingleArray =
+    prism'
+      (\e -> _Array # [e])
+      (\j -> (\(h, t) -> bool Nothing (Just h) (List.null t)) =<< j ^? _Array . _Cons)
 
-one ::
-  Json
-one =
-  _Number # 1
+class AsEmptyObject p f s where
+  _EmptyObject ::
+    Optic' p f s ()
+    
+instance (Choice p, Applicative f) => AsEmptyObject p f Json where
+  _EmptyObject =
+    prism'
+      (\() -> _Object # Map.empty)
+      (\j -> boolMaybe (any Map.null (j ^? _Object)))
 
-isEmptyString ::
-  Json
-  -> Bool
-isEmptyString j =
-  any Text.null (j ^? _String)
-
-emptyString ::
-  Json
-emptyString =
-  _String # Text.empty
-
-isSingleString ::
-  Json
-  -> Bool
-isSingleString j =
-  any Text.null (j ^? _String . _tail)
-
-singleString ::
-  Char
-  -> Json
-singleString c =
-  _String # Text.singleton c
-
-isEmptyArray ::
-  Json
-  -> Bool
-isEmptyArray j =
-  any List.null (j ^? _Array)
-
-emptyArray ::
-  Json
-emptyArray =
-  _Array # []
-
-isSingleArray ::
-  Json
-  -> Bool
-isSingleArray j =
-  any List.null (j ^? _Array . _tail)
-
-singleArray ::
-  Json
-  -> Json
-singleArray e =
-  _Array # [e]
-
-isEmptyObject ::
-  Json
-  -> Bool
-isEmptyObject j =
-  any Map.null (j ^? _Object)
-
-emptyObject ::
-  Json
-emptyObject =
-  _Object # Map.empty
-
-isSingleObject ::
-  Json
-  -> Bool
-isSingleObject j =
-  any (\m -> Map.size m == 1) (j ^? _Object)
-
-singleObject ::
-  JsonString
-  -> Json
-  -> Json
-singleObject k v =
-  _Object # Map.singleton k v
+class AsSingleObject p f s where
+  _SingleObject ::
+    Optic' p f s (JsonString, Json)
+    
+instance (Choice p, Applicative f) => AsSingleObject p f Json where
+  _SingleObject =
+    prism'
+      (\(k, v) -> _Object # Map.singleton k v)
+      (\j -> (\m -> bool Nothing (Map.toList m ^? _head) (Map.size m == 1)) =<< j ^? _Object)

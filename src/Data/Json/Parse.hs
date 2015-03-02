@@ -1,7 +1,55 @@
 module Data.Json.Parse where
 
+import Control.Category(Category(id))
+import Control.Applicative
+import Control.Monad(Monad(return, fail), void, replicateM, (=<<))
+import Data.Bool(Bool(False, True))
+import Data.Char(Char)
+import Data.Functor(Functor(fmap), (<$>))
+import Data.Int(Int)
+import Data.List(elem, notElem)
+import Data.Maybe(Maybe, maybe)
+import Data.String(String)
+import Numeric(readHex)
+import Prelude(show)
+import Text.Parser.Char
+import Text.Parser.Combinators
+
 
 {-
+
+// def repsep[T](p: ⇒ Parser[T], q: ⇒ Parser[Any]): Parser[List[T]] 
+// A parser generator for interleaved repetitions.
+
+// (Parser[T])def <~[U](q: ⇒ Parser[U]): Parser[T] 
+// A parser combinator for sequential composition which keeps only the left result.
+
+// (Parser[T])def ~>[U](q: ⇒ Parser[U]): Parser[U] 
+// A parser combinator for sequential composition which keeps only the right result.
+
+// (Parser[T])def ^^[U](f: (T) ⇒ U): Parser[U] 
+// A parser combinator for function application.
+
+// (Parser[T])def ^^^[U](v: ⇒ U): Parser[U] 
+// A parser combinator that changes a successful result into the specified value.
+
+// (Parser[T])def |||[U >: T](q0: ⇒ Parser[U]): Parser[U]
+// A parser combinator for alternative with longest match composition.
+
+// (Parser[T])def |[U >: T](q: ⇒ Parser[U]): Parser[U]
+// A parser combinator for alternative composition.
+
+// def acceptSeq[ES](es: ES)(implicit arg0: (ES) ⇒ Iterable[Elem]): Parser[List[Elem]]
+// A parser that matches only the given scala.collection.Iterable collection of elements es.
+
+// def ~[U](q: ⇒ Parser[U]): Parser[~[T, U]]
+// A parser combinator for sequential composition.
+
+// (Parser[T])def *: Parser[List[T]]
+// Returns a parser that repeatedly parses what this parser parses. 
+
+// (Parser[T])def ?: Parser[Option[T]]
+// Returns a parser that optionally parses what this parser parses.
 
 package com.ephox
 package argonaut
@@ -28,57 +76,120 @@ class JsonParser extends Parsers {
   def jboolean = (f | t) ^^ jBool
 
   def trailingcomma = ((whitespace ~ ',')?)
+-}
 
-  def openarray = '[' ~ whitespace
+openarray ::
+  CharParsing m =>
+  m Char
+openarray =
+  char '[' <* spaces
 
-  def closearray = whitespace ~ ']'
+closearray ::
+  CharParsing m =>
+  m Char
+closearray =
+  spaces *> char ']'
 
-  def openobject = '{' ~ whitespace
+openobject ::
+  CharParsing m =>
+  m Char
+openobject =
+  char '{' <* spaces
 
-  def closeobject = whitespace ~ '}'
+closeobject ::
+  CharParsing m =>
+  m Char
+closeobject =
+  spaces *> char '}'
 
-  def separator = whitespace ~ ',' ~ whitespace
+separator ::
+  CharParsing m =>
+  m ()
+separator =
+  void (spaces *> char ',' <* spaces)
 
-  def colanSeparator = whitespace ~ ':' ~ whitespace
+colonSeparator ::
+  CharParsing m =>
+  m ()
+colonSeparator =
+  void (spaces *> char ':' <* spaces)
+
+false ::
+  CharParsing m =>
+  m Bool
+false =
+  False <$ string "false"
+
+true ::
+  CharParsing m =>
+  m Bool
+true =
+  True <$ string "true"
+
+str ::
+  CharParsing m =>
+  m String
+str =
+  between (char '"') (char '"') (many anyChar)
+
+unicode ::
+  (Monad m, CharParsing m) =>
+  m String
+unicode =
+  let r s = case readHex s of
+              []  ->
+                fail "failed to parse hex"
+              (x,_):[] ->
+                return (show (x :: Int))
+              _:_:_ ->
+                fail "ambiguously parsed hex"
+  in r =<< replicateM 4 hexDigit
+
+jchar ::
+  (Monad m, CharParsing m) =>
+  m String
+jchar =
+  let escape c = char '\\' *> char c
+  in (:[]) <$> satisfy (`notElem` ['\\', '"']) <|>
+     "\"" <$ escape '\"' <|>
+     "\\" <$ escape '\\' <|>
+     "/"  <$ escape '/'  <|>
+     "\b" <$ escape 'b'  <|>
+     "\f" <$ escape 'f'  <|>
+     "\n" <$ escape 'n'  <|>
+     "\r" <$ escape 'r'  <|>
+     "\t" <$ escape 't'  <|>
+     char '\\' *> unicode
+
+undef = undef
+
+notzerodigit ::
+  CharParsing m =>
+  m Char
+notzerodigit =
+  satisfy (`elem` ['1'..'9'])
+
+sign ::
+  CharParsing m =>
+  m (Maybe Char)
+sign =
+  optional (char '-')
+
+digitseries ::
+  CharParsing m =>
+  m String
+digitseries =
+  liftA2 (:) notzerodigit (many digit)
+
+int ::
+  CharParsing m =>
+  m String
+int =
+  liftA2 (maybe id (:)) sign (digitseries <|> pure <$> digit)
+
+  {-}
 
   def pair: Parser[(String, Json)] = (string <~ colanSeparator) ~ jvalue ^^ { case k ~ v => (k, v)}
-
-  def f = acceptSeq("false") ^^^ false
-
-  def t = acceptSeq("true") ^^^ true
-
-  def string = '"' ~> chars <~ '"'
-
-  def chars = (char*) ^^ {_.mkString}
-
-  def whitespaceChar = elem("whitespace", Character.isWhitespace(_))
-
-  def whitespace = (whitespaceChar*)
-
-  def char =
-          (elem("char", (ch: Char) => ch != '\\' && ch != '"') ^^ { (ch: Char) => ch.toString }
-          |escape ~ '\"' ^^^ "\""
-          |escape ~ '\\' ^^^ "\\"
-          |escape ~ '/'  ^^^ "/"
-          |escape ~ 'b'  ^^^ "\b"
-          |escape ~ 'f'  ^^^ "\f"
-          |escape ~ 'n'  ^^^ "\n"
-          |escape ~ 'r'  ^^^ "\r"
-          |escape ~ 't'  ^^^ "\t"
-          |escape ~> 'u' ~> unicode)
-
-  def escape = '\\'
-
-  def unicode = repN(4, hex) flatMap (code =>
-    try {
-      val i = Integer.parseInt(code mkString, 16)
-      val cs = Character.toChars(i)
-      success(cs.mkString)
-    } catch {
-      case e => failure(e.toString)
-    })
-
-  def hex = digit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f'
 
   def number = (int ||| intfrac ||| intexp ||| intfracexp) ^^ {q => JsonNumber(q.mkString.toDouble)}
 
